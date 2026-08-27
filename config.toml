@@ -1,0 +1,67 @@
+schema_version = 1
+
+[project]
+device = "Lenovo Legion Y700 Gen 3 (TB321FU)"
+firmware_id_pattern = "^TB321FU_ROW_ZUI_(?P<version>[0-9]+(?:\\.[0-9]+)+)$"
+firmware_id_template = "{device}_{region}_ZUI_{version}"
+firmware_label = "TB321FU ROW ZUI {version}"
+profile_label = "TB321FU ROW {version}"
+fingerprint_identity = "Lenovo/TB321FU/TB321FU"
+fingerprint_variant = "user/release-keys"
+
+[inputs]
+# Each profile set provides only these two ignored firmware files.
+directory = "source"
+vendor_boot = "vendor_boot.img"
+aop = "aop.mbn"
+fingerprint_property = "com.android.build.vendor_boot.fingerprint"
+
+[target]
+# The matching DTB is discovered from the image. Its index, hash, and table
+# shape are outputs of inspection, not firmware configuration inputs.
+compatible = "qcom,pineapple"
+msm_id = [557, 131072]
+gpu_model = "Adreno750v2"
+
+[paths]
+stock = "stock/stock.txt"
+stock_dts = "stock/stock.dts"
+uv_dir = "uv"
+
+[regulators.generic]
+# Pineapple picker values and names from LTBox 3.2.7 regulator_levels.rs.
+values = [
+  16, 48, 52, 56, 60, 64, 72, 80, 96, 128, 144, 192,
+  224, 256, 288, 320, 336, 384, 400, 416, 432, 448, 464, 480,
+]
+names = [
+  "RETENTION", "MIN_SVS", "LOW_SVS_D2", "LOW_SVS_D1",
+  "LOW_SVS_D0", "LOW_SVS", "LOW_SVS_P1", "LOW_SVS_L1",
+  "LOW_SVS_L2", "SVS", "SVS_L0", "SVS_L1", "SVS_L2", "NOM",
+  "NOM_L0", "NOM_L1", "NOM_L2", "TURBO", "TURBO_L0",
+  "TURBO_L1", "TURBO_L2", "TURBO_L3", "SUPER_TURBO",
+  "SUPER_TURBO_NO_CPR",
+]
+# Observed-stock advisory floor from the LTBox 3.2.7 table validator.
+ltbox_observed_min_vote = 50
+
+[regulators.aop]
+# Values are recovered automatically from this resource in aop.mbn.
+resource = "gfx.lvl"
+
+[generation]
+generic_steps = [2, 3]
+aop_steps = [1, 2, 3]
+comparison_generic_step = 2
+generic_profile_filename = "uv_{steps}_level_{frequency}.txt"
+aop_profile_filename = "uv_{steps}_aop_level_{frequency}.txt"
+generic_diff_filename = "diff_{frequency}.md"
+aop_diff_filename = "diff_aop_{frequency}.md"
+
+[[generation.frequency_variants]]
+name = "903mhz"
+
+[[generation.frequency_variants]]
+name = "905mhz"
+from_hz = 903_000_000
+to_hz = 905_000_000
