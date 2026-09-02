@@ -29,7 +29,7 @@ stock_dts = "stock/stock.dts"
 uv_dir = "uv"
 
 [regulators.generic]
-# Pineapple picker values and names from LTBox 3.2.7 regulator_levels.rs.
+# Repository copy of the values and names used by LTBox's Pineapple picker.
 values = [
   16, 48, 52, 56, 60, 64, 72, 80, 96, 128, 144, 192,
   224, 256, 288, 320, 336, 384, 400, 416, 432, 448, 464, 480,
@@ -42,7 +42,7 @@ names = [
   "TURBO_L1", "TURBO_L2", "TURBO_L3", "SUPER_TURBO",
   "SUPER_TURBO_NO_CPR",
 ]
-# Observed-stock advisory floor from the LTBox 3.2.7 table validator.
+# Observed-stock advisory floor used by LTBox's table validator.
 ltbox_observed_min_vote = 50
 
 [regulators.aop]

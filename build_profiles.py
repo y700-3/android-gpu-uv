@@ -1683,9 +1683,9 @@ def render_diff_summary(
 ) -> list[str]:
     steps_label = " / ".join(f"-{profile.steps}" for profile in profiles)
     family_label = (
-        "generic KonaBess/LTBox picker shifts"
+        "Generic picker"
         if method == "generic"
-        else "exact firmware AOP GFX shifts"
+        else "Exact AOP"
     )
     marker_prefix = ""
     if variant.replacement:
@@ -1707,7 +1707,7 @@ def render_diff_summary(
         f"`{sha256_text(stock_profile)}`",
     ]
     for profile in profiles:
-        zero_label = "floor" if method == "aop" else "unchanged"
+        zero_label = "floor" if method == "aop" else "modeled unchanged"
         distribution = ", ".join(
             f"{count} × -{drop}" if drop else f"{count} × 0 ({zero_label})"
             for drop, count in sorted(profile.drop_distribution.items(), reverse=True)
@@ -1715,7 +1715,7 @@ def render_diff_summary(
         lines.extend(
             [
                 f"- -{profile.steps} changed votes: **{profile.vote_changes}**",
-                f"- -{profile.steps} effective AOP drops: **{distribution}**",
+                f"- -{profile.steps} modeled AOP shifts: **{distribution}**",
                 f"- SHA-256 of the -{profile.steps} profile: `{sha256_text(profile.text)}`",
             ]
         )
@@ -1731,8 +1731,10 @@ def render_diff_transformation(
             [
                 "Each stock vote is moved down by the configured number of positions",
                 "in the generic KonaBess/LTBox picker and clamped at its floor.",
-                "Unsupported requests are rounded upward by KGSL to the first supported",
-                "firmware AOP value.",
+                "Unsupported requests are modeled with the public Qualcomm Gen7 ceiling",
+                "rule: the first recovered firmware AOP value greater than or equal to",
+                "the request. This does not verify that Lenovo's packaged KGSL binary",
+                "matches the cited public implementation.",
             ]
         )
     else:
@@ -1740,7 +1742,8 @@ def render_diff_transformation(
             [
                 "Each stock vote is moved down by the configured number of positions",
                 "in the exact firmware `gfx.lvl` list and clamped at its floor.",
-                "Every request is directly supported, so KGSL does not need to round it.",
+                "Every request occurs in the recovered firmware AOP list, so this",
+                "comparison does not require the unsupported-request ceiling model.",
             ]
         )
     lines.extend(
@@ -1749,7 +1752,7 @@ def render_diff_transformation(
             f"AOP provenance: {regulators.aop_provenance}; SHA-256:",
             f"`{regulators.aop_source_sha256}`.",
             "",
-            "Detected active firmware GFX values:",
+            "Recovered active firmware `gfx.lvl` values:",
             "",
             "```text",
             ", ".join(str(vote) for vote in regulators.aop_values),
@@ -1773,7 +1776,11 @@ def render_diff_effective_mapping(
         rules = ["---:"]
         for profile in profiles:
             headers.extend(
-                [f"Requested -{profile.steps}", f"Effective -{profile.steps}", "AOP drop"]
+                [
+                    f"Requested -{profile.steps}",
+                    f"Modeled -{profile.steps}",
+                    "AOP positions down",
+                ]
             )
             rules.extend(["---:", "---:", "---:"])
         lines.extend(["| " + " | ".join(headers) + " |", "|" + "|".join(rules) + "|"])
@@ -1794,7 +1801,7 @@ def render_diff_effective_mapping(
         reference = config.generation.comparison_generic_step
         lines.extend(
             [
-                f"Compared with the effective generic picker -{reference} profile:",
+                f"Compared with the modeled Generic picker -{reference} profile:",
                 "",
                 "| Exact profile | Less aggressive rows | Identical rows | More aggressive rows |",
                 "|---|---:|---:|---:|",
@@ -1831,7 +1838,7 @@ def render_diff_group(
         header = ["ID", "Frequency, MHz", "Stock vote"]
         rule = ["---:", "---:", "---"]
     for profile in profiles:
-        header.extend([f"Profile -{profile.steps}", "AOP drop"])
+        header.extend([f"Profile -{profile.steps}", "AOP positions down"])
         rule.extend(["---", "---:"])
     lines = [
         f"## `qcom,gpu-pwrlevels-{group.group}`",
@@ -1897,7 +1904,8 @@ def render_diff_notes(
                 [
                     "",
                     "LTBox may report non-blocking outside-stock-range advisories for",
-                    f"the configured low requests: `{mapped}` after KGSL mapping.",
+                    "the configured low requests. Modeled public-rule mappings:",
+                    f"`{mapped}`.",
                 ]
             )
     if variant.replacement:
@@ -2117,17 +2125,19 @@ def render_release_report(
             "",
             "## Transformation summary",
             "",
-            "Effective drops are positions in the recovered firmware AOP list, not",
-            "millivolts. Generic and exact-AOP step numbers are not interchangeable.",
+            "Modeled shifts are positions in the recovered firmware AOP list, not",
+            "millivolts. Generic rows use the public Qualcomm Gen7 ceiling rule;",
+            "this does not verify Lenovo's packaged KGSL binary. Generic and exact-AOP",
+            "step numbers are not interchangeable.",
             "",
             "| Profile | Family | Frequency rule | Changed votes | Changed "
-            "frequencies | Effective AOP drops |",
+            "frequencies | Modeled AOP shifts |",
             "|---|---|---|---:|---:|---|",
         ]
     )
     for family in profile_families(config.generation):
         family_label = "Generic picker" if family.method == "generic" else "Exact AOP"
-        zero_label = "unchanged after mapping" if family.method == "generic" else "floor"
+        zero_label = "modeled unchanged" if family.method == "generic" else "floor"
         for variant in config.generation.variants:
             for profile in generated[(family.method, variant.name)]:
                 filename = render_filename(
@@ -2148,10 +2158,11 @@ def render_release_report(
     lines.extend(
         [
             "",
-            "## Cross-family effective comparison",
+            "## Cross-family modeled comparison",
             "",
             "Each cell compares the exact-AOP row with the named generic-picker row",
-            "after KGSL-style mapping: `less / same / more` aggressive. Frequency",
+            "under the public Qualcomm Gen7 ceiling model: `less / same / more`",
+            "aggressive. This is not verified packaged-driver behavior. Frequency",
             "markers do not affect these values, so the comparison covers both variants.",
             "",
             "| Exact profile | "

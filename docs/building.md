@@ -5,10 +5,15 @@ shared TOML policy, identifies the firmware from local binaries, selects the
 target GPU DTB by its contents, extracts the active AOP list, and generates
 tracked profiles plus optional local diffs and a release report.
 
+This is a maintainer guide for adding or rebuilding a firmware set. Users who
+only want to install an existing profile do not need firmware images or the
+builder; they should use the [profile guide](profile-guide.md).
+
 ## Contents
 
 - [Requirements and directory layout](#requirements-and-directory-layout)
 - [Required firmware files](#required-firmware-files)
+- [Where the input files come from](#where-the-input-files-come-from)
 - [Source identity and trust boundary](#source-identity-and-trust-boundary)
 - [Shared configuration](#shared-configuration)
 - [Create a firmware profile set](#create-a-firmware-profile-set)
@@ -46,18 +51,21 @@ profiles/<firmware-id>/
     └── uv_*.txt
 ```
 
-Firmware directories do not duplicate the configuration. The directory name is
-the firmware ID; source hashes, the DTB index, table shape, and active AOP
-values are derived on every run.
+Firmware directories do not duplicate the configuration. Their name combines
+the project device/region label with the ZUI version. For example, ZUI
+`17.5.10.272` uses
+`profiles/TB321FU_ROW_ZUI_17.5.10.272/`. Source hashes, the DTB index, table
+shape, and active AOP values are derived on every run.
 
 ## Required firmware files
 
-The builder requires these two unsuffixed inputs from the same stock package:
+The builder requires two files named exactly `vendor_boot.img` and `aop.mbn`
+from the same stock package:
 
 | File | Data used by the builder |
 |---|---|
 | `vendor_boot.img` | Vendor boot identity, embedded DTBs, selected GPU table, and DTB metadata |
-| `aop.mbn` | Command DB `gfx.lvl` data used for exact-AOP profiles and effective generic mapping |
+| `aop.mbn` | Command DB `gfx.lvl` data used for exact-AOP profiles and the modeled Generic comparison |
 
 The builder does not use:
 
@@ -71,6 +79,44 @@ The source pair must come from one package. The builder checks that every stock
 GPU vote is compatible with the recovered AOP list, but the two files do not
 cryptographically identify each other. Package URL and archive metadata, plus
 the system Android release and security patch, remain external provenance.
+
+## Where the input files come from
+
+Start with a complete, unmodified stock ROW firmware package for the exact ZUI
+version being added. Obtain it from Lenovo's distribution or another source
+whose origin and archive identity you can retain. This repository does not
+provide firmware packages, and the builder cannot authenticate a third-party
+download.
+
+How the two inputs are stored depends on the package format:
+
+- a service or factory package may contain raw files such as
+  `image/vendor_boot.img` and `image/aop.mbn`; extract those archive members
+  without modifying them;
+- an OTA package may store partitions inside `payload.bin`; use a trusted
+  payload extractor to extract the `vendor_boot` and `aop` partitions from the
+  same payload;
+- if an extractor calls the raw AOP partition `aop.img`, copy it into the
+  source directory as `aop.mbn` without converting or unpacking it. The
+  subsequent `--inspect` command validates the required little-endian RISC-V
+  ELF32 layout and rejects an unrelated image.
+
+For example, a factory-package extraction may provide this matching pair:
+
+```text
+<extracted-package>/
+└── image/
+    ├── vendor_boot.img
+    └── aop.mbn
+```
+
+Copy both files from the package for the exact ZUI release being built. Do not
+combine a `vendor_boot.img` from one release with an `aop.mbn` from another.
+
+Do not use an image pulled after LTBox/KonaBess modification as the stock
+source. Keep the original archive, its download location, and its checksum
+outside the ignored `source/` workspace so another maintainer can reproduce
+the extraction.
 
 ## Source identity and trust boundary
 
@@ -110,9 +156,15 @@ is used because Python 3.11 parses it through the standard library.
 | `inputs` | Source-directory and required filename conventions |
 | `target` | Semantic DTB selector: compatible, MSM ID, and GPU model |
 | `paths` | Tracked stock and UV locations |
-| `regulators.generic` | Picker and advisory threshold pinned to LTBox 3.2.7 |
+| `regulators.generic` | Picker and advisory threshold sourced from LTBox |
 | `regulators.aop` | Command DB resource name; values are recovered from `aop.mbn` |
 | `generation` | Step counts, profile/diff naming, and frequency variants |
+
+LTBox is a separate project. Its picker supplied the initial Generic values,
+but [`config.toml`](../config.toml) is the source of truth for this builder;
+installing a newer LTBox does not change generated profile data automatically.
+If the upstream picker changes, review that change explicitly before updating
+the local policy.
 
 The ignored release path is fixed at `source/release/`; it cannot be configured
 globally or per firmware.
@@ -130,12 +182,14 @@ intentionally contained within `source/`.
 
 ## Create a firmware profile set
 
-Run from the repository root. Replace the example ID with the exact source
-build ID before copying anything:
+Run from the repository root. For a new firmware set, set `zui_version` to the
+version in the matching stock-package metadata or build fingerprint. For
+example:
 
 ```bash
 set -eu
-firmware_id=TB321FU_ROW_ZUI_0.0.0.0
+zui_version=17.5.10.272
+firmware_id="TB321FU_ROW_ZUI_${zui_version}"
 
 test ! -e "profiles/$firmware_id" || {
   echo "Refusing to overwrite profiles/$firmware_id" >&2
@@ -148,6 +202,16 @@ cp /path/to/vendor_boot.img \
 cp /path/to/aop.mbn \
   "profiles/$firmware_id/source/aop.mbn"
 ```
+
+The refusal guard above is for creating a new set. To rebuild an existing set,
+keep its canonical firmware directory and tracked `stock/` and `uv/`
+directories, then place the two matching inputs in its ignored `source/`
+directory and continue with `--inspect`. Do not reuse a source file from a
+different release.
+
+The builder reconstructs the expected directory name from the embedded vendor
+fingerprint and refuses a normal build if it does not match. Do not choose the
+version from another package or infer it from a similar filename.
 
 The entire `source/` directory is ignored by Git. Generated `stock/` and `uv/`
 artifacts are tracked. Release reports and readable diffs remain local under
@@ -211,10 +275,9 @@ The target is not selected by a saved index or hash. For each DTB the builder:
    are identical.
 
 The AOP parser supports only the expected little-endian RISC-V ELF32 executable
-layout. It searches file-backed load segments for complete Command DB ARC
-templates, validates entry and data offsets, normalizes the requested resource,
-and accepts duplicate templates only when their active value lists are
-identical.
+layout. It searches file-backed load segments for complete Command DB resource
+tables, validates entry and data offsets, normalizes the requested resource,
+and accepts duplicates only when their active value lists are identical.
 
 Before serialization the builder verifies:
 
@@ -268,12 +331,14 @@ for checks outside the builder's scope.
 
 For a new firmware release:
 
-1. obtain the unsuffixed stock `vendor_boot.img` and matching `aop.mbn`;
+1. obtain stock files named exactly `vendor_boot.img` and `aop.mbn` from the
+   same firmware package;
 2. create the canonical directory and run `--inspect`;
 3. review the fingerprint and semantic target instead of assuming an index;
 4. generate the tracked artifacts and run `--check` against the source files;
 5. run `--release` and inspect its local report and readable diffs;
-6. independently decode the profile containers and verify unchanged metadata;
+6. independently decode the profile containers and verify unchanged
+   non-target table fields;
 7. record manual evidence separately as defined by the
    [validation guide](validation-and-testing.md#what-requires-manual-evidence);
 8. record only checks actually performed for that source;

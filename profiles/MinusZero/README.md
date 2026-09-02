@@ -13,8 +13,8 @@ firmware-derived profile in this repository uses either file as its source or
 default. Compare either file with the complete stock GPU table from the
 intended firmware before use.
 
-See the shared [profile guide](../../docs/profile-guide.md) for regulator-vote
-semantics, profile-family definitions, and naming.
+See the shared [technical profile reference](../../docs/technical-reference.md)
+for regulator-request semantics, profile-family definitions, and naming.
 
 ## Contents
 
@@ -32,8 +32,8 @@ semantics, profile-family definitions, and naming.
 | `uv_3_level_905mhz.txt` | `d85eb7f3727765384b10418961fb86bb7412d6403eb7974731aee21336b42223` | 835 bytes | `pineapple` | empty | 2 / 26 |
 
 Each file is a Base64-encoded gzip JSON document with the standard fields
-`chip`, `desc`, and `freq`. Both payloads parse successfully with LTBox 3.2.7
-and have no blocking structural validation errors.
+`chip`, `desc`, and `freq`. Both payloads parse successfully with the LTBox
+validator and have no blocking structural validation errors.
 
 ## Shared structure
 

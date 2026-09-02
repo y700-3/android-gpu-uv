@@ -8,7 +8,6 @@ unstable on a particular tablet.
 
 - [Validation layers](#validation-layers)
 - [Builder validation boundary](#builder-validation-boundary)
-- [KGSL request mapping](#kgsl-request-mapping)
 - [LTBox findings](#ltbox-findings)
 - [What requires manual evidence](#what-requires-manual-evidence)
 - [Device stability risks](#device-stability-risks)
@@ -21,8 +20,8 @@ unstable on a particular tablet.
 | Layer | Question | Evidence |
 |---|---|---|
 | Container | Can the complete profile be decoded and parsed? | Base64, gzip, JSON, chip identity, and full-table parsing |
-| Structural transformation | Did only the declared cells change? | Stock comparison, unique rows, descending frequencies, unchanged metadata, and local release diffs |
-| Firmware semantics | What requests can this firmware actually express? | Selected DTB, exact `aop.mbn` `gfx.lvl`, KGSL mapping, source hashes, and local release report |
+| Structural transformation | Did only the declared cells change? | Stock comparison, unique rows, descending frequencies, unchanged non-target table fields, and local release diffs |
+| Firmware evidence | Which AOP requests were recovered, and how are Generic requests compared? | Selected DTB, recovered `aop.mbn` `gfx.lvl` list, modeled public-Gen7 ceiling rule, source hashes, and local release report |
 | Tool integration | Can the exact LTBox/KonaBess version validate and apply it to the intended table? | Parser, validator, normalization, replacement, and image round-trip checks |
 | Device stability | Does one physical tablet remain correct across workloads and conditions? | Repeated transition-heavy, thermal, suspend/resume, and output-checked tests |
 
@@ -42,34 +41,17 @@ These checks do not authenticate an `Algorithm: NONE` image, prove that both
 inputs came from one package, validate tool integration, or establish
 electrical stability. Each later layer requires separate evidence.
 
-## KGSL request mapping
-
-The active `gfx.lvl` values come from each firmware's `aop.mbn`. Generic picker
-profiles may request values absent from that list. Qualcomm's public Gen7 KGSL
-path selects the first supported dependency value greater than or equal to the
-request:
-
-- [`adreno_gen7_rpmh.c`](https://github.com/qualcomm-linux/kgsl/blob/a183ffbab70cc9fc2f29092bce45fcbe9111b410/adreno_gen7_rpmh.c)
-- [`adreno_rpmh.c`](https://github.com/qualcomm-linux/kgsl/blob/a183ffbab70cc9fc2f29092bce45fcbe9111b410/adreno_rpmh.c)
-
-The builder uses this ceiling rule to report effective generic-profile drops.
-Any independent comparison between a packaged KGSL module and the public
-implementation must be documented separately from the generated report. Do
-not carry that evidence over to another release.
-
-Exact-AOP profiles request only values recovered directly from `gfx.lvl`, so
-they avoid the generic picker's unsupported intermediate requests. This makes
-their intended shift through firmware-supported AOP values easier to reason
-about, but does not make the shift automatically stable.
-
 ## LTBox findings
 
-The [LTBox 3.2.7 validator](https://github.com/miner7222/LTBox/blob/v3.2.7/crates/ltbox-patch/src/konabess/export.rs#L116-L125)
+The [LTBox validator](https://github.com/miner7222/LTBox/blob/main/crates/ltbox-patch/src/konabess/export.rs)
 distinguishes blocking structural errors from advisory findings. An
 outside-observed-range advisory can identify a low encoded request without
-proving that the profile is malformed. Its significance depends on the exact
-firmware mapping shown in the corresponding local release diff. Later LTBox
-versions may use different advisory ranges or validation rules.
+proving that the profile is malformed or how the packaged driver will handle
+it. The [technical profile reference](technical-reference.md#the-two-level-lists)
+documents the recovered firmware list, the public-driver comparison model, and
+their evidence limits. Advisory ranges and validation rules may change between
+LTBox releases, so use the latest stable release and record its version with
+the test results.
 
 Interpret the results conservatively:
 
@@ -130,7 +112,9 @@ at a time.
 
 - verify the imported description and firmware set;
 - confirm the intended DTB/table in LTBox;
-- when using a 905 MHz variant, verify only the expected 903 MHz points changed;
+- when using a 905 MHz variant, compare it with the corresponding 903 MHz
+  profile: only the three expected 903 → 905 MHz frequency cells may differ;
+  regulator requests and every non-frequency table field must match;
 - retain `stock.txt` before extended testing.
 
 ### 2. Exercise sustained load
@@ -195,9 +179,11 @@ Record:
 - whether stock reproduces it;
 - relevant log excerpts.
 
-If one frequency region is implicated, raise its vote by one directly supported
-AOP position and retest the same sequence. Do not compensate by changing ACD,
-bus, dependency, SKU, or speed-bin data without separate characterization.
+When developing a custom curve outside the shared generator, an implicated
+frequency region can be raised by one position in the recovered firmware AOP
+list before retesting the same sequence. The current repository generator does
+not implement per-frequency exceptions. Do not compensate by changing ACD, bus,
+dependency, SKU, or speed-bin data without separate characterization.
 
 ## Evidence standard
 
@@ -216,5 +202,5 @@ than saying only that a profile "works." At minimum include:
 | Result | Stable so far, failure details, or stock comparison |
 
 Use "stable in these tests" rather than claiming universal stability. The
-[profile guide](profile-guide.md) defines the transformation represented by
-each profile family.
+[technical profile reference](technical-reference.md) defines every profile
+transformation.
